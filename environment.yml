@@ -1,0 +1,8 @@
+name: jokettt_demo
+dependencies:
+- python=3
+- pylint
+- numpy
+- pip
+- pip:
+  - jokettt
