@@ -44,7 +44,6 @@ def build_random_ztable_initdata():
         for _y in range(0, 3):
             for _e in range(0, 2):
                 ztable_init[_x][_y][_e] = random.randint(0, sys.maxsize)
-    np.save('data/test', ztable_init)
     return ztable_init
 
 # --------------------------------------------------------------------
