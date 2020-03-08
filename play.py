@@ -63,6 +63,7 @@ def play_human_vs_ai_game(human_player, ai_player, first_ai, board):
 AI_PIECE = 'x'
 HUMAN_PIECE = 'o'
 ALPHA_VALUE = 0.1
+EPS_VALUE = 0.2
 def main():
     """Main program: parses options, declare board and players, and
         plays a series of games"""
@@ -82,7 +83,8 @@ def main():
 
     # --------------------------------------------------
     # 2. PRINTS SOME INFORMATION
-    print("TYPE OF AI PLAYER = {}".format(args.player_mode))
+    print(f"TYPE OF AI PLAYER = {args.player_mode}")
+    print(f"VERBOSITY LEVEL   = {verbosity}")
 
     # --------------------------------------------------
     # 3. DECLARES BOARD AND PLAYERS
@@ -90,7 +92,7 @@ def main():
     if args.player_mode == "minimax":
         auto_player = MinimaxPlayer(AI_PIECE, False, verbosity)
     else:
-        auto_player = LearnerPlayer(AI_PIECE, board, {}, ALPHA_VALUE, verbosity)
+        auto_player = LearnerPlayer(AI_PIECE, board, {}, ALPHA_VALUE, EPS_VALUE, verbosity)
 
     console_player = ConsolePlayer(HUMAN_PIECE, verbosity)
 

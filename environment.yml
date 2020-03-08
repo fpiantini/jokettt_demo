@@ -3,6 +3,8 @@ dependencies:
 - python=3
 - pylint
 - numpy
+- pandas
+- plotly
 - pip
 - pip:
   - jokettt==1.0.0

@@ -19,6 +19,7 @@ from jokettt.minimaxplayer import MinimaxPlayer
 LEARNER_PIECE = 'x'
 OPPONENT_PIECE = 'o'
 DEFAULT_ALPHA_VALUE = 0.1
+DEFAULT_EPS_VALUE = 0.1
 
 # --------------------------------------------------------------------
 # --------------------------------------------------------------------
@@ -33,6 +34,19 @@ def alpha_value(_x):
     if alpha <= 0.0 or alpha > 1.0:
         raise ArgumentTypeError("%r not in range (0.0, 1.0]" % (alpha,))
     return alpha
+# --------------------------------------------------------------------
+# --------------------------------------------------------------------
+def eps_value(_x):
+    """Definition of argument type for learner eps value,
+       a float number in the range [0.0, 1.0]"""
+    try:
+        eps = float(_x)
+    except ValueError:
+        raise ArgumentTypeError("%r not a floating point literal" % (_x,))
+
+    if eps < 0.0 or eps > 1.0:
+        raise ArgumentTypeError("%r not in range [0.0, 1.0]" % (eps,))
+    return eps
 
 # --------------------------------------------------------------------
 # --------------------------------------------------------------------
@@ -89,6 +103,8 @@ def play_ai_vs_ai_game(player_a, player_b, board, player_a_first, verbosity_leve
         print("  --- NEW GAME ---")
     player_a_turn = player_a_first
 
+    player_a.reset_exploring_move_flag()
+
     while result == 0 and board.is_not_full():
 
         if player_a_turn:
@@ -110,33 +126,38 @@ def play_ai_vs_ai_game(player_a, player_b, board, player_a_first, verbosity_leve
         # player_a wins
         if isinstance(player_b, LearnerPlayer):
             player_b.learn_from_defeat(board)
-        return 1
+        return 1, player_a.exploring_move_flag()
     if result < 0:
         # player_b player wins
         if isinstance(player_a, LearnerPlayer):
             player_a.learn_from_defeat(board)
-        return -1
+        return -1, player_a.exploring_move_flag()
     # draw
-    return 0
+    return 0, player_a.exploring_move_flag()
 
 # --------------------------------------------------------------------
-def update_results_and_print_statistics(res, total_games, results):
+def update_results_and_print_statistics(res, total_games, results, verbosity = 0):
     """Update results and print games statistics"""
     if res > 0:
         results['player_a_win'] += 1
-        result_string = "Player A wins!  "
+        result_string = "Player A wins "
     elif res < 0:
         results['player_b_win'] += 1
-        result_string = "Player B wins!  "
+        result_string = "Player B wins "
     else:
         results['draw'] += 1
-        result_string = "Draw!           "
-    print("%s --- {draw = %d, A_win = %d, B_win = %d} - {%.3f, %.3f, %.3f}" %
-          (result_string, results['draw'], results['player_a_win'], results['player_b_win'],
-           results['draw'] / total_games,
-           results['player_a_win'] / total_games,
-           results['player_b_win'] / total_games,))
-
+        result_string = "Draw          "
+    perc_draw = results['draw'] / total_games
+    perc_a_win = results['player_a_win'] / total_games
+    perc_b_win = results['player_b_win'] / total_games
+    if verbosity > 0:
+        print(f"#{total_games:05d} - {result_string} --- "
+              f"[draw = {results['draw']},"
+              f" Awin = {results['player_a_win']},"
+              f" Bwin = {results['player_b_win']}] - "
+              f"[{perc_draw:.3f}, {perc_a_win:.3f}, {perc_b_win:.3f}]")
+    else:
+        print(f"{total_games},{perc_draw:.5f}")
 # --------------------------------------------------------------------
 # --------------------------------------------------------------------
 #   ***  MAIN ***
@@ -155,6 +176,10 @@ def main():
                         help="alpha parameter for the learner player")
     parser.add_argument("--alpha2", type=alpha_value, default=0.1,
                         help="alpha parameter for the opponent player (only if learner)")
+    parser.add_argument("--eps1", type=eps_value, default=0.1,
+                        help="epsilon parameter for the learner player")
+    parser.add_argument("--eps2", type=eps_value, default=0.1,
+                        help="epsilon parameter for the opponent player (only if learner)")
     parser.add_argument("-n", "--num_games", type=number_of_games, default=100,
                         help="Number of games to play")
     parser.add_argument("--switch_turn", action="store_true",
@@ -170,6 +195,7 @@ def main():
         verbosity = args.verbosity
     else:
         verbosity = 0
+
     if args.alpha1:
         alpha1 = args.alpha1
     else:
@@ -178,6 +204,15 @@ def main():
         alpha2 = args.alpha2
     else:
         alpha2 = DEFAULT_ALPHA_VALUE
+
+    if args.eps1:
+        eps1 = args.eps1
+    else:
+        eps1 = DEFAULT_EPS_VALUE
+    if args.eps2:
+        eps2 = args.eps2
+    else:
+        eps2 = DEFAULT_EPS_VALUE
 
     # --------------------------------------------------
     # If requested, load learned data
@@ -206,30 +241,39 @@ def main():
         init_ztable = build_random_ztable_initdata()
         init_values = {}
 
-    if args.savedata:
-        print("...the learned data will be saved to %s.npz" % args.savedata)
-    else:
-        print("...the learned data will not be saved")
+    if verbosity > 0:
+        if args.savedata:
+            print("...the learned data will be saved to %s.npz" % args.savedata)
+        else:
+            print("...the learned data will not be saved")
 
     # --------------------------------------------------
     # Declares board and players
     board = Board(LEARNER_PIECE, OPPONENT_PIECE, init_ztable)
-    player_a = LearnerPlayer(LEARNER_PIECE, board, init_values, alpha1, verbosity)
-    print(" LEARNER PLAYER --- alpha = ", alpha1)
+    player_a = LearnerPlayer(LEARNER_PIECE, board, init_values, alpha1, eps1, verbosity-1)
+    if verbosity > 0:
+        print(f"LEARNER PLAYER --- alpha = {alpha1}, eps = {eps1}")
 
     if args.opponenttype == "minimax":
         player_b = MinimaxPlayer(OPPONENT_PIECE)
-        print(" OPPONENT IS A SMART MINIMAX PLAYER")
+        if verbosity > 0:
+            print("OPPONENT IS A SMART MINIMAX PLAYER")
     elif args.opponenttype == "learner":
-        player_b = LearnerPlayer(OPPONENT_PIECE, board, alpha2)
-        print(" OPPONENT IS A LEARNER PLAYER --- alpha = ", alpha2)
+        player_b = LearnerPlayer(OPPONENT_PIECE, board, alpha2, eps2)
+        if verbosity > 0:
+            print(f"OPPONENT IS A LEARNER PLAYER --- alpha = {alpha2}, eps = {eps2}")
     else:
         player_b = MinimaxPlayer(OPPONENT_PIECE, True)
-        print(" OPPONENT IS A RANDOM (DUMB) PLAYER")
+        if verbosity > 0:
+            print("OPPONENT IS A RANDOM (DUMB) PLAYER")
 
     # --------------------------------------------------
     # Play games
-    print(" playing ", args.num_games, " games")
+    if verbosity > 0:
+        print(" playing ", args .num_games, " games")
+    else:
+        print("num_games,percentage_draws")
+
     results = {}
     results['player_a_win'] = 0
     results['player_b_win'] = 0
@@ -237,10 +281,14 @@ def main():
     total_games = 0
     player_a_turn = True
 
-    for _ in range(0, args.num_games):
-        res = play_ai_vs_ai_game(player_a, player_b, board, player_a_turn, verbosity)
-        total_games += 1
-        update_results_and_print_statistics(res, total_games, results)
+    while total_games < args.num_games:
+        res, expl_move_done = play_ai_vs_ai_game(player_a, player_b, board, player_a_turn, verbosity-1)
+        if expl_move_done:
+            if verbosity > 0:
+                print("game skipped for statistics because an exploring move was done")
+        else:
+            total_games += 1
+            update_results_and_print_statistics(res, total_games, results, verbosity)
         if args.switch_turn:
             player_a_turn = not player_a_turn
         board.reset()
